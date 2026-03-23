@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grading - Context Refinement</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Grading: <span id="config-name">Loading...</span></h1>
+            <div class="header-info">
+                <span id="model-name">Model: ...</span>
+                <a href="/" class="btn-back">← Back to Dashboard</a>
+            </div>
+        </header>
+
+        <div class="grading-metrics">
+            <div class="metric-card">
+                <div class="metric-value" id="chunks">0/0</div>
+                <div class="metric-label">Chunks</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value" id="words">0</div>
+                <div class="metric-label">Words</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value" id="coverage">0%</div>
+                <div class="metric-label">Key Facts</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value" id="tokens">0</div>
+                <div class="metric-label">Tokens</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value" id="early">No</div>
+                <div class="metric-label">Early Stop</div>
+            </div>
+        </div>
+
+        <div class="content-comparison">
+            <div class="content-panel">
+                <h2>Original Article</h2>
+                <div class="scrollable-content" id="article-content">
+                    Loading...
+                </div>
+            </div>
+            <div class="content-panel">
+                <h2>Generated Summary</h2>
+                <div class="scrollable-content" id="summary-content">
+                    Loading...
+                </div>
+            </div>
+        </div>
+
+        <div class="key-facts-section">
+            <h2>Key Facts Analysis</h2>
+            <table class="facts-table" id="facts-table">
+                <thead>
+                    <tr>
+                        <th>Category</th>
+                        <th>Found</th>
+                        <th>Missing</th>
+                        <th>Coverage</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td colspan="4">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const configId = window.location.pathname.split('/').pop();
+
+        async function loadGrading() {
+            try {
+                const response = await fetch(`/api/grading/${configId}`);
+                const data = await response.json();
+
+                if (data.error) {
+                    document.getElementById('config-name').textContent = 'Not Found';
+                    return;
+                }
+
+                // Update header
+                document.getElementById('config-name').textContent = data.config_name;
+                document.getElementById('model-name').textContent = `Model: ${data.model}`;
+
+                // Update metrics
+                document.getElementById('chunks').textContent = 
+                    `${data.chunks_processed}/${data.total_chunks}`;
+                document.getElementById('words').textContent = data.words;
+                document.getElementById('coverage').textContent = `${data.coverage.toFixed(1)}%`;
+                document.getElementById('tokens').textContent = 
+                    `${(data.input_tokens + data.output_tokens).toLocaleString()}`;
+                document.getElementById('early').textContent = data.early_completion ? 'Yes' : 'No';
+
+                // Update content panels
+                document.getElementById('article-content').textContent = data.article_content;
+                document.getElementById('summary-content').textContent = data.summary;
+
+                // Update facts table
+                updateFactsTable(data.key_facts);
+
+            } catch (err) {
+                console.error('Failed to load grading:', err);
+            }
+        }
+
+        function updateFactsTable(facts) {
+            const tbody = document.querySelector('#facts-table tbody');
+            
+            const rows = Object.entries(facts).map(([key, data]) => {
+                const foundStr = data.found.length > 0 ? 
+                    data.found.slice(0, 5).join(', ') + 
+                    (data.found.length > 5 ? ` (+${data.found.length - 5})` : '') : 
+                    '-';
+                
+                const missingStr = data.missing.length > 0 ? 
+                    data.missing.slice(0, 5).join(', ') + 
+                    (data.missing.length > 5 ? ` (+${data.missing.length - 5})` : '') : 
+                    '-';
+                
+                const coverageClass = data.coverage >= 70 ? 'good' : 
+                    data.coverage >= 50 ? 'ok' : 'bad';
+
+                return `
+                    <tr>
+                        <td>${data.category}</td>
+                        <td class="found">${foundStr}</td>
+                        <td class="missing">${missingStr}</td>
+                        <td class="${coverageClass}">${data.coverage.toFixed(1)}%</td>
+                    </tr>
+                `;
+            }).join('');
+
+            tbody.innerHTML = rows;
+        }
+
+        loadGrading();
+    </script>
+</body>
+</html>

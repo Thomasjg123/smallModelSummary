@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Context Refinement Dashboard v2</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="/static/style_v2.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Context Refinement Dashboard v2</h1>
+            <div class="header-controls">
+                <select id="run-selector">
+                    <option value="">Select a run...</option>
+                </select>
+                <button id="connect-btn" class="btn btn-primary" onclick="togglePolling()">
+                    Start 30s Updates
+                </button>
+                <div class="status-indicator" id="status-indicator">
+                    <span class="dot"></span>
+                    <span id="status-text">Disconnected</span>
+                </div>
+            </div>
+        </header>
+
+        <div class="live-banner" id="live-banner" style="display: none;">
+            <span class="pulse"></span>
+            <span>Live updates active</span>
+        </div>
+
+        <section class="model-comparison">
+            <div class="model-card" id="small-model-card">
+                <div class="model-header">
+                    <div class="model-badge small">Small</div>
+                    <h2>Qwen3.5 0.8B</h2>
+                    <div class="live-dot" id="small-live"></div>
+                </div>
+                <div class="progress-section">
+                    <div class="progress-label">
+                        <span>Progress</span>
+                        <span id="small-progress-text">0/0 chunks</span>
+                    </div>
+                    <div class="progress-track">
+                        <div class="progress-fill small" id="small-progress-fill"></div>
+                    </div>
+                    <div class="progress-percent" id="small-percent">0%</div>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat">
+                        <span class="stat-label">Config</span>
+                        <span class="stat-value" id="small-config">-</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">Words</span>
+                        <span class="stat-value" id="small-words">0</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">Total Sections</span>
+                        <span class="stat-value" id="small-sections">0</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">Final Summary</span>
+                        <span class="stat-value" id="small-summary">0</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">Avg In/Chunk</span>
+                        <span class="stat-value" id="small-avg-in">-</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">Avg Out/Chunk</span>
+                        <span class="stat-value" id="small-avg-out">-</span>
+                    </div>
+                    <div class="stat highlight">
+                        <span class="stat-label">Condense</span>
+                        <span class="stat-value" id="small-condense">-</span>
+                    </div>
+                </div>
+                <div class="speed-section">
+                    <div class="speed-stat">
+                        <span class="speed-label">Avg Time/Chunk</span>
+                        <span class="speed-value" id="small-avg-time">-</span>
+                    </div>
+                    <div class="speed-stat">
+                        <span class="speed-label">Total Time</span>
+                        <span class="speed-value" id="small-total-time">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="vs-divider">
+                <span class="vs">VS</span>
+            </div>
+
+            <div class="model-card" id="big-model-card">
+                <div class="model-header">
+                    <div class="model-badge big">Big</div>
+                    <h2>Llama</h2>
+                    <div class="live-dot" id="big-live"></div>
+                </div>
+                <div class="progress-section">
+                    <div class="progress-label">
+                        <span>Progress</span>
+                        <span id="big-progress-text">0/0 chunks</span>
+                    </div>
+                    <div class="progress-track">
+                        <div class="progress-fill big" id="big-progress-fill"></div>
+                    </div>
+                    <div class="progress-percent" id="big-percent">0%</div>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat">
+                        <span class="stat-label">Config</span>
+                        <span class="stat-value" id="big-config">-</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">Words</span>
+                        <span class="stat-value" id="big-words">0</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">Total Sections</span>
+                        <span class="stat-value" id="big-sections">0</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">Final Summary</span>
+                        <span class="stat-value" id="big-summary">0</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">Avg In/Chunk</span>
+                        <span class="stat-value" id="big-avg-in">-</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">Avg Out/Chunk</span>
+                        <span class="stat-value" id="big-avg-out">-</span>
+                    </div>
+                    <div class="stat highlight">
+                        <span class="stat-label">Condense</span>
+                        <span class="stat-value" id="big-condense">-</span>
+                    </div>
+                </div>
+                <div class="speed-section">
+                    <div class="speed-stat">
+                        <span class="speed-label">Avg Time/Chunk</span>
+                        <span class="speed-value" id="big-avg-time">-</span>
+                    </div>
+                    <div class="speed-stat">
+                        <span class="speed-label">Total Time</span>
+                        <span class="speed-value" id="big-total-time">-</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="comparison-table-section">
+            <h2>Live Comparison</h2>
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>Metric</th>
+                        <th>Small Model</th>
+                        <th>Big Model</th>
+                        <th>Winner</th>
+                    </tr>
+                </thead>
+                <tbody id="comparison-body">
+                    <tr>
+                        <td colspan="4" class="no-data">Select a run to see comparison</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="activity-section">
+            <h2>Recent Activity</h2>
+            <div class="activity-log" id="activity-log">
+                <div class="log-entry empty">No activity yet</div>
+            </div>
+        </section>
+
+        <section class="results-section">
+            <h2>Completed Tests</h2>
+            <table class="results-table" id="results-table">
+                <thead>
+                    <tr>
+                        <th>Model</th>
+                        <th>Config</th>
+                        <th>Chunks</th>
+                        <th>Avg Time</th>
+                        <th>Total Time</th>
+                        <th>Words</th>
+                    </tr>
+                </thead>
+                <tbody id="results-body">
+                    <tr>
+                        <td colspan="6" class="no-data">No completed tests</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <footer class="debug-info">
+            <span>Cache Stats: <span id="cache-hits">0</span> hits, <span id="cache-misses">0</span> misses</span>
+            <span>Last Update: <span id="last-update">-</span></span>
+        </footer>
+    </div>
+
+    <script>
+        let refreshInterval = null;
+        let lastChunks = {small: 0, big: 0};
+        let lastSmallConfig = '';
+        let lastBigConfig = '';
+
+        async function loadRuns() {
+            try {
+                const response = await fetch('/api/runs');
+                const runs = await response.json();
+                const selector = document.getElementById('run-selector');
+                selector.innerHTML = '<option value="">Select a run...</option>';
+                runs.forEach(run => {
+                    const option = document.createElement('option');
+                    option.value = run;
+                    option.textContent = run;
+                    selector.appendChild(option);
+                });
+                if (runs.length > 0) {
+                    selector.value = runs[0];
+                    loadInitialData();
+                }
+            } catch (err) {
+                console.error('Failed to load runs:', err);
+            }
+        }
+
+        document.getElementById('run-selector').addEventListener('change', (e) => {
+            currentRunId = e.target.value;
+            if (currentRunId) {
+                loadInitialData();
+            }
+        });
+
+        async function loadInitialData() {
+            await Promise.all([
+                updateCurrentStatus(),
+                updateSpeedComparison(),
+                updateResults()
+            ]);
+
+            updateCacheStats();
+        }
+
+        async function updateCurrentStatus() {
+            try {
+                const response = await fetch('/api/all-current');
+                const data = await response.json();
+
+                updateModelStatus('small', data.small);
+                updateModelStatus('big', data.big);
+
+                document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
+            } catch (err) {
+                console.error('Failed to update status:', err);
+            }
+        }
+
+        function updateModelStatus(model, data) {
+            const prefix = model;
+            const progress = data.total_chunks > 0 
+                ? Math.round((data.chunk_num / data.total_chunks) * 100) 
+                : 0;
+
+            document.getElementById(`${prefix}-progress-text`).textContent = 
+                `${data.chunk_num}/${data.total_chunks} chunks`;
+            document.getElementById(`${prefix}-percent`).textContent = `${progress}%`;
+            document.getElementById(`${prefix}-progress-fill`).style.width = `${progress}%`;
+            document.getElementById(`${prefix}-config`).textContent = data.config_name || '-';
+            document.getElementById(`${prefix}-words`).textContent = data.words || 0;
+            document.getElementById(`${prefix}-sections`).textContent = formatNumber(data.total_section_tokens || 0);
+            document.getElementById(`${prefix}-summary`).textContent = formatNumber(data.final_summary_tokens || 0);
+            document.getElementById(`${prefix}-avg-in`).textContent = data.avg_input_per_chunk > 0 ? formatNumber(data.avg_input_per_chunk) : '-';
+            document.getElementById(`${prefix}-avg-out`).textContent = data.avg_output_per_chunk > 0 ? formatNumber(data.avg_output_per_chunk) : '-';
+            
+            const condense = data.condensation_ratio || 0;
+            const condenseEl = document.getElementById(`${prefix}-condense`);
+            if (condense > 0) {
+                condenseEl.textContent = condense.toFixed(2) + 'x';
+                condenseEl.className = 'stat-value ' + (condense < 1 ? 'condensing' : 'expanding');
+            } else {
+                condenseEl.textContent = '-';
+                condenseEl.className = 'stat-value';
+            }
+
+            const liveDot = document.getElementById(`${prefix}-live`);
+            if (data.running) {
+                liveDot.classList.add('active');
+            } else {
+                liveDot.classList.remove('active');
+            }
+        }
+
+        async function updateSpeedComparison() {
+            try {
+                const response = await fetch('/api/all-speed');
+                const data = await response.json();
+
+                const small = data.small || {};
+                const big = data.big || {};
+
+                document.getElementById('small-avg-time').textContent = 
+                    small.avg_time_per_chunk > 0 ? `${small.avg_time_per_chunk}s` : '-';
+                document.getElementById('small-total-time').textContent = 
+                    small.total_time > 0 ? `${small.total_time}s` : '-';
+                document.getElementById('big-avg-time').textContent = 
+                    big.avg_time_per_chunk > 0 ? `${big.avg_time_per_chunk}s` : '-';
+                document.getElementById('big-total-time').textContent = 
+                    big.total_time > 0 ? `${big.total_time}s` : '-';
+
+                updateComparisonTable(data);
+            } catch (err) {
+                console.error('Failed to update speed comparison:', err);
+            }
+        }
+
+        function updateComparisonTable(data) {
+            const small = data.small || {};
+            const big = data.big || {};
+
+            const body = document.getElementById('comparison-body');
+            
+            if (!small.avg_time_per_chunk && !big.avg_time_per_chunk && !small.total_chunks && !big.total_chunks) {
+                body.innerHTML = '<tr><td colspan="4" class="no-data">No data available</td></tr>';
+                return;
+            }
+
+            const avgTimeWinner = getWinner(small.avg_time_per_chunk, big.avg_time_per_chunk, true);
+            const condenseWinner = getWinner(small.condensation_ratio, big.condensation_ratio, true);
+            const chunksWinner = getWinner(small.total_chunks || 0, big.total_chunks || 0, false);
+
+            body.innerHTML = `
+                <tr>
+                    <td>Avg Time/Chunk</td>
+                    <td>${small.avg_time_per_chunk > 0 ? small.avg_time_per_chunk + 's' : '-'}</td>
+                    <td>${big.avg_time_per_chunk > 0 ? big.avg_time_per_chunk + 's' : '-'}</td>
+                    <td class="winner-${avgTimeWinner}">${avgTimeWinner || '-'}</td>
+                </tr>
+                <tr>
+                    <td>Condensation</td>
+                    <td>${small.condensation_ratio > 0 ? small.condensation_ratio.toFixed(2) + 'x' : '-'}</td>
+                    <td>${big.condensation_ratio > 0 ? big.condensation_ratio.toFixed(2) + 'x' : '-'}</td>
+                    <td class="winner-${condenseWinner}">${condenseWinner || '-'}</td>
+                </tr>
+                <tr>
+                    <td>Total Chunks</td>
+                    <td>${small.total_chunks || 0}</td>
+                    <td>${big.total_chunks || 0}</td>
+                    <td class="winner-${chunksWinner}">${chunksWinner || '-'}</td>
+                </tr>
+                <tr>
+                    <td>Completed Runs</td>
+                    <td>${small.completed_runs || 0}</td>
+                    <td>${big.completed_runs || 0}</td>
+                    <td>-</td>
+                </tr>
+            `;
+        }
+
+        function getWinner(small, big, lowerIsBetter) {
+            if (!small && !big) return null;
+            if (!small) return 'Big';
+            if (!big) return 'Small';
+            if (small === big) return 'Tie';
+            if (lowerIsBetter) {
+                return small < big ? 'Small' : 'Big';
+            }
+            return small > big ? 'Small' : 'Big';
+        }
+
+        function updateResults(data) {
+            const body = document.getElementById('results-body');
+            
+            if (!data.results || data.results.length === 0) {
+                body.innerHTML = '<tr><td colspan="6" class="no-data">No completed tests</td></tr>';
+                return;
+            }
+
+            body.innerHTML = data.results.map(r => `
+                <tr>
+                    <td><span class="model-tag ${r.model.toLowerCase()}">${r.model}</span></td>
+                    <td>${r.config_name || r.config_id}</td>
+                    <td>${r.chunks_processed}/${r.total_chunks}</td>
+                    <td>${r.avg_time_per_chunk > 0 ? r.avg_time_per_chunk + 's' : '-'}</td>
+                    <td>${r.total_time > 0 ? r.total_time + 's' : '-'}</td>
+                    <td>${r.words || 0}</td>
+                </tr>
+            `).join('');
+        }
+
+        async function updateCacheStats() {
+            try {
+                const response = await fetch('/api/cache/stats');
+                const stats = await response.json();
+                document.getElementById('cache-hits').textContent = stats.hits;
+                document.getElementById('cache-misses').textContent = stats.misses;
+            } catch (err) {
+                console.error('Failed to update cache stats:', err);
+            }
+        }
+
+        function togglePolling() {
+            const btn = document.getElementById('connect-btn');
+            const banner = document.getElementById('live-banner');
+            const statusIndicator = document.getElementById('status-indicator');
+            const statusText = document.getElementById('status-text');
+
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+                refreshInterval = null;
+                btn.textContent = 'Start 30s Updates';
+                btn.classList.remove('btn-danger');
+                btn.classList.add('btn-primary');
+                banner.style.display = 'none';
+                statusText.textContent = 'Stopped';
+                statusIndicator.classList.remove('connected');
+            } else {
+                refreshInterval = setInterval(pollAndUpdate, 30000);
+                pollAndUpdate();
+                btn.textContent = 'Stop Updates';
+                btn.classList.remove('btn-primary');
+                btn.classList.add('btn-danger');
+                banner.style.display = 'flex';
+                statusText.textContent = 'Polling (30s)';
+                statusIndicator.classList.add('connected');
+            }
+        }
+
+        async function pollAndUpdate() {
+            try {
+                const [currentData, speedData, resultsData] = await Promise.all([
+                    fetch('/api/all-current').then(r => r.json()),
+                    fetch('/api/all-speed').then(r => r.json()),
+                    fetch('/api/all-results').then(r => r.json())
+                ]);
+
+                const smallChunk = currentData.small.chunk_num;
+                const bigChunk = currentData.big.chunk_num;
+                const smallConfig = currentData.small.config_name;
+                const bigConfig = currentData.big.config_name;
+
+                const smallChanged = smallChunk !== lastChunks.small;
+                const bigChanged = bigChunk !== lastChunks.big;
+                const configChanged = smallConfig !== lastSmallConfig || bigConfig !== lastBigConfig;
+
+                if (smallChanged || bigChanged || configChanged) {
+                    updateModelStatus('small', currentData.small);
+                    updateModelStatus('big', currentData.big);
+                    updateComparisonTable(speedData);
+                    
+                    if (smallChanged) {
+                        addActivityEntry('small', smallChunk);
+                        lastChunks.small = smallChunk;
+                    }
+                    if (bigChanged) {
+                        addActivityEntry('big', bigChunk);
+                        lastChunks.big = bigChunk;
+                    }
+                    
+                    lastSmallConfig = smallConfig;
+                    lastBigConfig = bigConfig;
+                }
+
+                updateResults(resultsData);
+                updateCacheStats();
+                document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
+            } catch (err) {
+                console.error('Poll error:', err);
+            }
+        }
+
+        function addActivityEntry(model, chunkNum) {
+            const log = document.getElementById('activity-log');
+            const time = new Date().toLocaleTimeString();
+            
+            const emptyEntry = log.querySelector('.log-entry.empty');
+            if (emptyEntry) {
+                emptyEntry.remove();
+            }
+            
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${model}`;
+            entry.innerHTML = `
+                <span class="log-time">${time}</span>
+                <span class="log-model">${model === 'small' ? 'Small' : 'Big'}</span>
+                <span class="log-msg">Chunk ${chunkNum} completed</span>
+            `;
+            
+            log.insertBefore(entry, log.firstChild);
+            
+            while (log.children.length > 50) {
+                log.removeChild(log.lastChild);
+            }
+        }
+
+        function formatNumber(num) {
+            if (num >= 1000000) {
+                return (num / 1000000).toFixed(1) + 'M';
+            }
+            if (num >= 1000) {
+                return (num / 1000).toFixed(1) + 'K';
+            }
+            return num.toString();
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadRuns();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+*.log
+
+# Runtime artifacts
+runs/
+data/*.db
+data/*.sqlite*
+
+# Local scratch/debug copies
+*_temp.py

@@ -1,0 +1,90 @@
+"""Debug CLI for step-by-step testing of summarization configs. Run 1"""
+
+from __future__ import annotations
+
+import sys
+import time
+from pathlib import Path
+from typing import Optional
+
+from config import (
+    ARTICLES,
+    Article,
+    RUNS_DIR,
+    SMALL_MODEL,
+    TestConfig,
+    TEST_CONFIGS,
+    DoneSignalType,
+)
+from chunker import Chunk, create_chunks
+from db import TestDatabase
+from fetch_articles import fetch_article
+from summarizer import (
+    call_model,
+    detect_done_signal,
+    extract_summary_from_response,
+)
+
+
+class Colors:
+    HEADER = '\033[95m'
+    BLUE = '\033[94m'
+    CYAN = '\033[96m'
+    GREEN = '\033[92m'
+    YELLOW = '\033[93m'
+    RED = '\033[91m'
+    BOLD = '\033[1m'
+    ENDC = '\033[0m'
+    
+    @staticmethod
+    def input_prompt(s: str) -> str:
+        return f"{Colors.CYAN}{Colors.BOLD}>>> INPUT PROMPT:{Colors.ENDC}\n{s}"
+    
+    @staticmethod
+    def response(s: str) -> str:
+        return f"{Colors.GREEN}{Colors.BOLD}<<< RESPONSE:{Colors.ENDC}\n{s}"
+    
+    @staticmethod
+    def sql_query(s: str) -> str:
+        return f"{Colors.YELLOW}{Colors.BOLD}>>> SQL QUERY:{Colors.ENDC}\n{s}"
+    
+    @staticmethod
+    def sql_response(s: str) -> str:
+        return f"{Colors.BLUE}{Colors.BOLD}<<< SQL RESPONSE:{Colors.ENDC}\n{s}"
+    
+    @staticmethod
+    def file_write(s: str) -> str:
+        return f"{Colors.RED}{Colors.BOLD}>>> FILE WRITE:{Colors.ENDC}\n{s}"
+    
+    @staticmethod
+    def file_read(s: str) -> str:
+        return f"{Colors.BLUE}{Colors.BOLD}<<< FILE READ:{Colors.ENDC}\n{s}"
+    
+    @staticmethod
+    def action(s: str) -> str:
+        return f"{Colors.HEADER}{Colors.BOLD}*** ACTION:{Colors.ENDC} {s}"
+    
+    @staticmethod
+    def step(s: str) -> str:
+        return f"{Colors.BOLD}{Colors.HEADER}=== STEP:{Colors.ENDC} {s}"
+
+
+    @staticmethod
+    @staticmethod
+    def wait_for_enter(prompt: str = "Press ENTER to continue (q to quit, s to skip to end): "):
+        return "continue"
+
+
+
+
+# Step 1: Fetch article
+    print(Colors.action("Fetching article from Wikipedia..."))
+    content, token_estimate = fetch_article(article)
+    if not content:
+        print(Colors.RED + "ERROR: Could not fetch article" + Colors.ENDC)
+        return
+
+    print(f"Article fetched: {len(content)} chars, ~{token_estimate} tokens")
+    print(Colors.sql_response(f"content preview: {content[:500]}..."))
+
+    wait_for_enter()
