@@ -70,6 +70,65 @@ class Colors:
         return f"{Colors.BOLD}{Colors.HEADER}=== STEP:{Colors.ENDC} {s}"
 
 
+def _preview_response_lines(
+    response: str,
+    max_lines: int = 3,
+    max_width: int = 320,
+) -> tuple[str, int, int, bool]:
+    """Return a truncated preview plus line and char counts."""
+    if not response:
+        return "(no response content)", 0, 0, False
+    normalized = [line.rstrip() for line in response.strip().splitlines()]
+    if not normalized:
+        return "(no response content)", 0, len(response), False
+    preview_lines: list[str] = []
+    truncated = False
+    for line in normalized[:max_lines]:
+        if len(line) > max_width:
+            preview_lines.append(line[:max_width] + "...")
+            truncated = True
+            continue
+        else:
+            preview_lines.append(line)
+    preview = "\n".join(preview_lines)
+    if len(normalized) > max_lines:
+        truncated = True
+        preview += "\n..."
+    return preview, len(normalized), len(response), truncated
+
+
+def _token_summary(input_tokens: int, output_tokens: int) -> str:
+    """Return formatted token statistics with ratios."""
+    total = input_tokens + output_tokens
+    parts = [
+        f"Tokens: {input_tokens:,} in / {output_tokens:,} out",
+        f"total {total:,}",
+    ]
+    if input_tokens > 0:
+        ratio = output_tokens / input_tokens
+        parts.append(f"output/in {ratio:.2f}")
+    return " | ".join(parts)
+
+
+def _print_sql_response(
+    message: str,
+    show_prompts: bool,
+    max_lines: int = 2,
+    note: str = "SQL response truncated; run with --show-prompts to see the full text.",
+):
+    """Print a potentially-truncated SQL response depending on the prompt flag."""
+    if show_prompts:
+        print(Colors.sql_response(message))
+        return
+
+    lines = [line.rstrip() for line in message.strip().splitlines()]
+    preview = "\n".join(lines[:max_lines]) if lines else "(empty SQL response)"
+    print(Colors.sql_response(preview))
+
+    if len(lines) > max_lines:
+        print(Colors.action(note))
+
+
 MAX_MODEL_RETRIES = 3
 TEMPERATURE_STEP = 0.05
 MIN_TEMPERATURE = 0.1
@@ -116,6 +175,7 @@ def debug_single_config(
     article: Article,
     test_config: TestConfig,
     max_chunks: int = 2,
+    show_prompts: bool = False,
 ):
     """Debug a single config step by step."""
     
@@ -133,7 +193,11 @@ def debug_single_config(
         return
     
     print(f"Article fetched: {len(content)} chars, ~{token_estimate} tokens")
-    print(Colors.sql_response(f"content preview: {content[:500]}..."))
+    _print_sql_response(
+        f"content preview: {content[:500]}...",
+        show_prompts=show_prompts,
+        max_lines=2,
+    )
     
     wait_for_enter()
     
@@ -150,10 +214,18 @@ def debug_single_config(
     chunk_list = "\n".join(f"  {i+1}. {c.title}" for i, c in enumerate(chunks[:max_chunks]))
     if len(chunks) > max_chunks:
         chunk_list += f"\n  ... and {len(chunks) - max_chunks} more"
-    print(Colors.sql_response(chunk_list))
+    _print_sql_response(
+        chunk_list,
+        show_prompts=show_prompts,
+        max_lines=3,
+    )
     
     # Show total article content size
-    print(Colors.sql_response(f"Total article: {len(content)} chars"))
+    _print_sql_response(
+        f"Total article: {len(content)} chars",
+        show_prompts=show_prompts,
+        max_lines=1,
+    )
     
     wait_for_enter()
     
@@ -167,9 +239,17 @@ def debug_single_config(
     
     existing = db.get_test_run(article.name, config_id)
     if existing:
-        print(Colors.sql_response(f"Found existing run: {existing}"))
+        _print_sql_response(
+            f"Found existing run: {existing}",
+            show_prompts=show_prompts,
+            max_lines=2,
+        )
     else:
-        print(Colors.sql_response("No existing run found"))
+        _print_sql_response(
+            "No existing run found",
+            show_prompts=show_prompts,
+            max_lines=1,
+        )
     
     # Create or get test run
     test_run_id = existing["id"] if existing else db.create_test_run(
@@ -177,7 +257,11 @@ def debug_single_config(
         config_id=config_id,
         total_chunks=len(chunks),
     )
-    print(Colors.sql_response(f"test_run_id: {test_run_id}"))
+    _print_sql_response(
+        f"test_run_id: {test_run_id}",
+        show_prompts=show_prompts,
+        max_lines=1,
+    )
     
     current_summary = ""
     
@@ -186,6 +270,9 @@ def debug_single_config(
     # Step 4: Process chunks (limited to max_chunks)
     chunks_to_process = chunks[:max_chunks]
     all_chunk_summaries = []
+    total_input_tokens = 0
+    total_output_tokens = 0
+    total_input_words = 0
     
     for i, chunk in enumerate(chunks_to_process):
         print(f"\n{Colors.BOLD}{'='*40}")
@@ -193,7 +280,11 @@ def debug_single_config(
         print(f"{'='*40}{Colors.ENDC}")
         
         # Show chunk content size
-        print(Colors.sql_response(f"Section content: {len(chunk.content)} chars"))
+        _print_sql_response(
+            f"Section content: {len(chunk.content)} chars",
+            show_prompts=show_prompts,
+            max_lines=1,
+        )
         
 # Step 4a: Build prompts locally to see full content
         print(Colors.action("Building prompts locally..."))
@@ -269,8 +360,8 @@ def debug_single_config(
         
         user_prompt = "\n".join(user_parts)
         
-        print(Colors.input_prompt(f"SYSTEM PROMPT:\n{system_prompt}\n\n---\n\nUSER PROMPT:\n{user_prompt}"))
-        
+        if show_prompts:
+            print(Colors.input_prompt(f"SYSTEM PROMPT:\n{system_prompt}\n\n---\n\nUSER PROMPT:\n{user_prompt}"))
         wait_for_enter()
         
         # Step 4b: Save before processing
@@ -285,7 +376,11 @@ def debug_single_config(
         )
         
         print(Colors.sql_query(f"INSERT INTO chunk_progress (test_run_id, chunk_number, status) VALUES ({test_run_id}, {chunk.number}, 'in_progress')"))
-        print(Colors.sql_response("OK"))
+        _print_sql_response(
+            "OK",
+            show_prompts=show_prompts,
+            max_lines=1,
+        )
         
         wait_for_enter()
         
@@ -302,11 +397,27 @@ def debug_single_config(
             print(Colors.RED + "ERROR: Model call failed" + Colors.ENDC)
             continue
         
-        print(Colors.response(response[:1000]))
-        if len(response) > 1000:
-            print(Colors.action(f"(response truncated, full length: {len(response)} chars)"))
-        
-        print(Colors.sql_response(f"Tokens: {input_tokens} in / {output_tokens} out"))
+        preview, total_lines, total_chars, truncated = _preview_response_lines(response)
+        if total_lines == 0:
+            label = "Response preview (empty)"
+        else:
+            shown = min(3, total_lines)
+            label = f"Response preview (first {shown} of {total_lines} lines)"
+        if not show_prompts:
+            print("<< RESPONSE:")
+        print(Colors.response(f"{label}\n{preview}"))
+        if truncated:
+            print(Colors.action(
+                f"(response preview truncated; {total_lines} lines, {total_chars} chars total)")
+            )
+        _print_sql_response(
+            _token_summary(input_tokens, output_tokens),
+            show_prompts=show_prompts,
+            max_lines=1,
+        )
+        total_input_tokens += input_tokens
+        total_output_tokens += output_tokens
+        total_input_words += len(chunk.content.split())
         
         wait_for_enter()
         
@@ -319,7 +430,11 @@ def debug_single_config(
         original_summary_before = current_summary  # Store before updating
         
         if done_signal_detected:
-            print(Colors.sql_response(f"Done signal detected! Final summary:"))
+            _print_sql_response(
+                "Done signal detected! Final summary:",
+                show_prompts=show_prompts,
+                max_lines=1,
+            )
             print(Colors.response(final_summary))
             current_summary = final_summary
             all_chunk_summaries.append({
@@ -331,7 +446,11 @@ def debug_single_config(
             current_summary = extract_summary_from_response(
                 response, test_config.done_signal_type, test_config.max_words
             )
-            print(Colors.sql_response(f"Extracted summary:"))
+            _print_sql_response(
+                "Extracted summary:",
+                show_prompts=show_prompts,
+                max_lines=1,
+            )
             print(Colors.response(current_summary))
             all_chunk_summaries.append({
                 "chunk_title": chunk.title,
@@ -357,7 +476,11 @@ def debug_single_config(
         )
         
         print(Colors.sql_query(f"UPDATE chunk_progress SET summary_after='[full content]', status='completed' WHERE test_run_id={test_run_id} AND chunk_number={chunk.number}"))
-        print(Colors.sql_response("OK"))
+        _print_sql_response(
+            "OK",
+            show_prompts=show_prompts,
+            max_lines=1,
+        )
         
         wait_for_enter()
     
@@ -377,7 +500,11 @@ def debug_single_config(
             for c in all_chunks
             if c.get("summary_after") and c.get("status") == "completed"
         ]
-        print(Colors.sql_response(f"Found {len(section_summaries)} section summaries"))
+        _print_sql_response(
+            f"Found {len(section_summaries)} section summaries",
+            show_prompts=show_prompts,
+            max_lines=1,
+        )
         
         for c in all_chunks:
             print(f"\n{'='*40}")
@@ -385,9 +512,17 @@ def debug_single_config(
             print(f"{'='*40}")
             print(f"Status: {c.get('status', 'unknown')}")
             print(f"\n--- summary_before ---")
-            print(Colors.sql_response(c.get('summary_before', '') or '(empty)'))
+            _print_sql_response(
+                c.get('summary_before', '') or '(empty)',
+                show_prompts=show_prompts,
+                max_lines=2,
+            )
             print(f"\n--- summary_after ---")
-            print(Colors.sql_response(c.get('summary_after', '') or '(empty)'))
+            _print_sql_response(
+                c.get('summary_after', '') or '(empty)',
+                show_prompts=show_prompts,
+                max_lines=2,
+            )
         
         wait_for_enter()
         
@@ -416,8 +551,8 @@ Your task is to merge these summaries while:
 
 Please combine these into a single coherent summary that incorporates all key information from the article."""
         
-        print(Colors.input_prompt(f"COMBINE SYSTEM PROMPT:\n{combine_system_prompt}\n\n---\n\nCOMBINE USER PROMPT:\n{combine_user_prompt}"))
-        
+        if show_prompts:
+            print(Colors.input_prompt(f"COMBINE SYSTEM PROMPT:\n{combine_system_prompt}\n\n---\n\nCOMBINE USER PROMPT:\n{combine_user_prompt}"))
         wait_for_enter()
         print(Colors.action("Calling combine model directly..."))
         
@@ -430,14 +565,33 @@ Please combine these into a single coherent summary that incorporates all key in
         
         if combine_response:
             final_summary = combine_response.strip()
+            if not show_prompts:
+                print("<< RESPONSE:")
             print(Colors.response(final_summary))
-            print(Colors.sql_response(f"Combine tokens: {combine_in} in / {combine_out} out"))
+            token_line = _token_summary(combine_in, combine_out)
+            _print_sql_response(
+                token_line.replace("Tokens:", "Combine tokens:", 1),
+                show_prompts=show_prompts,
+                max_lines=1,
+            )
+            total_input_tokens += combine_in
+            total_output_tokens += combine_out
             current_summary = final_summary
         else:
             print(Colors.RED + "Combine failed, using last chunk summary" + Colors.ENDC)
         
         wait_for_enter()
     
+    final_summary_words = len(current_summary.split())
+    compression_ratio = (total_input_words / final_summary_words) if final_summary_words else 0
+    _print_sql_response(
+        f"Total tokens: {total_input_tokens:,} in / {total_output_tokens:,} out | "
+        f"Input words: {total_input_words:,} | Summary words: {final_summary_words:,} | "
+        f"Compression (input words per summary word): {compression_ratio:.2f}",
+        show_prompts=show_prompts,
+        max_lines=2,
+    )
+
     # Step 6: Save final summary
     print(Colors.action("Saving final summary to file..."))
     run_dir = RUNS_DIR / f"debug_{int(time.time())}" / article.name / config_id
@@ -459,7 +613,11 @@ Please combine these into a single coherent summary that incorporates all key in
     summary_path.write_text(summary_content)
     
     print(Colors.file_write(f"Written to: {summary_path}"))
-    print(Colors.sql_response(f"File content preview: {summary_content[:300]}..."))
+    _print_sql_response(
+        f"File content preview: {summary_content[:300]}...",
+        show_prompts=show_prompts,
+        max_lines=2,
+    )
     
     # Step 7: Update test run
     print(Colors.action("Updating test run status..."))
@@ -471,7 +629,11 @@ Please combine these into a single coherent summary that incorporates all key in
     )
     
     print(Colors.sql_query(f"UPDATE test_runs SET status='completed', chunks_completed={len(all_chunk_summaries)} WHERE id={test_run_id}"))
-    print(Colors.sql_response("OK"))
+    _print_sql_response(
+        "OK",
+        show_prompts=show_prompts,
+        max_lines=1,
+    )
     
     db.close()
     
@@ -493,11 +655,17 @@ def main():
     parser = argparse.ArgumentParser(description="Debug CLI for testing summarization configs")
     parser.add_argument("config_id", nargs="?", default="01", help="Config ID to test (default: 01)")
     parser.add_argument("max_chunks", nargs="?", type=int, default=2, help="Max chunks to process (default: 2)")
+    parser.add_argument(
+        "--show-prompts",
+        action="store_true",
+        help="Show the system + user prompts before each chunk (off by default).",
+    )
     args = parser.parse_args()
     
     # Select config
     config_id = args.config_id
     max_chunks = args.max_chunks
+    show_prompts = args.show_prompts
     
     small_configs = [c for c in TEST_CONFIGS if c.id in ["01", "02", "03"]]
     
@@ -524,7 +692,12 @@ def main():
     
     wait_for_enter("Press ENTER to start debugging...\n")
     
-    debug_single_config(ARTICLES[0], test_config, max_chunks=max_chunks)
+    debug_single_config(
+        ARTICLES[0],
+        test_config,
+        max_chunks=max_chunks,
+        show_prompts=show_prompts,
+    )
 
 
 if __name__ == "__main__":
